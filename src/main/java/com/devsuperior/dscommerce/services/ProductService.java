@@ -5,6 +5,7 @@ import com.devsuperior.dscommerce.dto.ProductDTO;
 import com.devsuperior.dscommerce.dto.ProductMinDTO;
 import com.devsuperior.dscommerce.entities.Category;
 import com.devsuperior.dscommerce.entities.Product;
+import com.devsuperior.dscommerce.repositories.CategoryRepository;
 import com.devsuperior.dscommerce.repositories.ProductRepository;
 import com.devsuperior.dscommerce.services.exceptions.DatabaseException;
 import com.devsuperior.dscommerce.services.exceptions.ResourceNotFoundException;
@@ -20,21 +21,23 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ProductService {
 
-    private ProductRepository repository;
+    private ProductRepository productRepository;
+    private CategoryRepository categoryRepository;
 
-    public ProductService(ProductRepository repository) {
-        this.repository = repository;
+    public ProductService(ProductRepository productRepository, CategoryRepository categoryRepository) {
+        this.productRepository = productRepository;
+        this.categoryRepository = categoryRepository;
     }
 
     @Transactional(readOnly = true)
     public Page<ProductMinDTO> findAll(String name, Pageable pageable) {
-        Page<Product> result = repository.searchByName(name, pageable);
+        Page<Product> result = productRepository.searchByName(name, pageable);
         return result.map(x -> new ProductMinDTO(x));
     }
 
     @Transactional(readOnly = true)
     public ProductDTO findById(Long id) {
-        Product result = repository.findById(id).orElseThrow(
+        Product result = productRepository.findById(id).orElseThrow(
                 () -> new ResourceNotFoundException("Resource not found")
         );
         return new ProductDTO(result);
@@ -44,16 +47,16 @@ public class ProductService {
     public ProductDTO insert(ProductDTO dto) {
         Product entity = new Product();
         copyDtoToEntity(dto, entity);
-        entity = repository.save(entity);
+        entity = productRepository.save(entity);
         return new ProductDTO(entity);
     }
 
     @Transactional
     public ProductDTO update(Long id, ProductDTO dto) {
         try {
-            Product entity = repository.getReferenceById(id);
+            Product entity = productRepository.getReferenceById(id);
             copyDtoToEntity(dto, entity);
-            entity = repository.save(entity);
+            entity = productRepository.save(entity);
             return new ProductDTO(entity);
         }
         catch (EntityNotFoundException e) {
@@ -63,11 +66,11 @@ public class ProductService {
 
     @Transactional(propagation = Propagation.SUPPORTS)
     public void delete(Long id) {
-        if (!repository.existsById(id)) {
+        if (!productRepository.existsById(id)) {
             throw new ResourceNotFoundException("Resource not found");
         }
         try {
-            repository.deleteById(id);
+            productRepository.deleteById(id);
         }
         catch (DataIntegrityViolationException e) {
             throw new DatabaseException("Database integrity violation");
@@ -79,11 +82,14 @@ public class ProductService {
         entity.setDescription(dto.getDescription());
         entity.setPrice(dto.getPrice());
         entity.setImgUrl(dto.getImgUrl());
+
         entity.getCategories().clear();
         for (CategoryDTO catDto : dto.getCategories()) {
-            Category category = new Category();
-            category.setId(catDto.getId());
+            Category category = categoryRepository.findById(catDto.getId()).orElseThrow(
+                    () -> new ResourceNotFoundException("Category not found")
+            );
             entity.getCategories().add(category);
         }
+
     }
 }
